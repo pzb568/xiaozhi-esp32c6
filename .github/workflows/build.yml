@@ -1,21 +1,40 @@
-name: test-idf-build
+name: build-esp32c6
 
 on:
   workflow_dispatch:
+  push:
+  pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
+    container:
+      image: espressif/idf:release-v5.5
+
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install ESP-IDF
-        uses: espressif/esp-idf-ci-action@v1
-        with:
-          esp_idf_version: v5.5.2
-
-      - name: Build info
+      - name: Init ESP-IDF environment
         run: |
+          . /opt/esp/idf/export.sh
           idf.py --version
+
+      - name: Set target (ESP32-C6)
+        run: |
+          . /opt/esp/idf/export.sh
+          idf.py set-target esp32c6
+
+      - name: Build firmware
+        run: |
+          . /opt/esp/idf/export.sh
+          idf.py build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiaozhi-esp32c6
+          path: |
+            build/*.bin
+            build/*.elf
