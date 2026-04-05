@@ -8,33 +8,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: ESP-IDF build
+      - name: Install ESP-IDF
         uses: espressif/esp-idf-ci-action@v1
         with:
           esp_idf_version: v5.4
 
-      - name: Verify IDF
+      - name: Verify IDF version
         run: |
-          idf.py --version        env:
-          ALL_VARIANTS: ${{ steps.list.outputs.all_variants }}
-        run: |
-          EVENT_NAME="${{ github.event_name }}"
-
-          # push 到 main 分支，编译全部变体
-          if [[ "$EVENT_NAME" == "push" ]]; then
-            echo "variants=$ALL_VARIANTS" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # pull_request 场景
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-          echo "Base: $BASE_SHA, Head: $HEAD_SHA"
-
-          CHANGED=$(git diff --name-only $BASE_SHA $HEAD_SHA || true)
+          idf.py --version          CHANGED=$(git diff --name-only $BASE_SHA $HEAD_SHA || true)
           echo -e "Changed files:\n$CHANGED"
 
           NEED_ALL=0
