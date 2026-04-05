@@ -19,22 +19,49 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Build + Merge firmware (ESP32-C6)
+      - name: Build + Merge firmware
         run: |
-          bash -lc "
-          . /opt/esp/idf/export.sh &&
-          idf.py set-target esp32c6 &&
-          idf.py fullclean &&
-          idf.py build &&
-          idf.py merge-bin
-          "
+          bash -lc ". /opt/esp/idf/export.sh && idf.py set-target esp32c6 && idf.py fullclean && idf.py build && idf.py merge-bin"
 
       - name: Prepare package
         run: |
           mkdir -p release
-
           cp build/merged-binary.bin release/
           cp build/*.bin release/ || true
+          cp build/*.elf release/ || true
+          echo "Build Time: $(date)" > release/info.txt
+          echo "Commit: $(git rev-parse --short HEAD)" >> release/info.txt
+
+      - name: Zip firmware
+        run: |
+          cd release
+          zip -r ../xiaozhi-esp32c6.zip .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiaozhi-esp32c6
+          path: xiaozhi-esp32c6.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: xiaozhi-esp32c6
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Auto Build
+          tag_name: build-${{ github.run_number }}
+          files: xiaozhi-esp32c6.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}          cp build/*.bin release/ || true
           cp build/*.elf release/ || true
 
           # 写版本信息
