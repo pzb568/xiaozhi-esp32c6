@@ -1,40 +1,24 @@
-name: Build Boards
+name: test-idf-build
 
 on:
-  push:
-    branches:
-      - main
-      - ci/* # for ci test
-  pull_request:
-    branches:
-      - main
-
-permissions:
-  contents: read
+  workflow_dispatch:
 
 jobs:
-  prepare:
-    name: Determine variants to build
+  build:
     runs-on: ubuntu-latest
-    outputs:
-      variants: ${{ steps.select.outputs.variants }}
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+
+      - name: ESP-IDF build
+        uses: espressif/esp-idf-ci-action@v1
         with:
-          fetch-depth: 0
+          esp_idf_version: v5.4
 
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - id: list
-        name: Get all variant list
+      - name: Verify IDF
         run: |
-          echo "all_variants=$(python scripts/release.py --list-boards --json)" >> $GITHUB_OUTPUT
-
-      - id: select
-        name: Select variants based on changes
-        env:
+          idf.py --version        env:
           ALL_VARIANTS: ${{ steps.list.outputs.all_variants }}
         run: |
           EVENT_NAME="${{ github.event_name }}"
