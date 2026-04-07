@@ -4,7 +4,10 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
-  pull_request:
+
+concurrency:
+  group: esp32c6-build
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -17,18 +20,47 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: false   # ✅ 关键修复：关闭子模块，解决报错
+          submodules: recursive   # ✅ 建议开启，很多组件依赖它
 
-      - name: Build + Merge firmware
+      # ✅ 缓存加速（非常关键）
+      - name: Cache build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.espressif
+            build
+          key: esp32c6-${{ hashFiles('**/CMakeLists.txt') }}
+          restore-keys: |
+            esp32c6-
+
+      # ✅ 指定目标 + 配置
+      - name: Build firmware
         run: |
-          bash -lc ". /opt/esp/idf/export.sh && idf.py set-target esp32c6 && idf.py fullclean && idf.py build && idf.py merge-bin"
+          bash -lc "
+          . /opt/esp/idf/export.sh
+          idf.py set-target esp32c6
+          
+          # 如果你有 sdkconfig.defaults 建议启用
+          # idf.py defconfig
+          
+          idf.py build
+          "
+
+      # ✅ 合并固件（明确输出）
+      - name: Merge firmware
+        run: |
+          bash -lc "
+          . /opt/esp/idf/export.sh
+          idf.py merge-bin -o build/firmware.bin
+          "
 
       - name: Prepare package
         run: |
           mkdir -p release
-          cp build/merged-binary.bin release/
+          cp build/firmware.bin release/
           cp build/*.bin release/ || true
           cp build/*.elf release/ || true
+
           echo "Build Time: $(date)" > release/info.txt
           echo "Commit: $(git rev-parse --short HEAD)" >> release/info.txt
 
@@ -54,11 +86,16 @@ jobs:
         with:
           name: xiaozhi-esp32c6
 
+      # ✅ 防止 tag 冲突
+      - name: Generate tag
+        id: tag
+        run: echo "tag=build-$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Auto Build
-          tag_name: build-${{ github.run_number }}
+          name: ESP32C6 Auto Build
+          tag_name: ${{ steps.tag.outputs.tag }}
           files: xiaozhi-esp32c6.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
