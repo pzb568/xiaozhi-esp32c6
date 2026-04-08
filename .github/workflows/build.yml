@@ -1,101 +1,28 @@
-name: build-esp32c6
+name: ESP-IDF Build
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main ]
-
-concurrency:
-  group: esp32c6-build
-  cancel-in-progress: true
+    branches:
+      - main
+      - master
+  pull_request:
 
 jobs:
-  build:
+  build-esp32c6:
+    name: Build for ESP32-C6 (Waveshare)
     runs-on: ubuntu-latest
-
-    container:
-      image: espressif/idf:release-v5.5
-
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          submodules: recursive   # ✅ 建议开启，很多组件依赖它
-
-      # ✅ 缓存加速（非常关键）
-      - name: Cache build
-        uses: actions/cache@v4
+          python-version: '3.10'
+      - name: Set up ESP-IDF environment
+        uses: espressif/esp-idf-ci-action@v1
         with:
-          path: |
-            ~/.espressif
-            build
-          key: esp32c6-${{ hashFiles('**/CMakeLists.txt') }}
-          restore-keys: |
-            esp32c6-
-
-      # ✅ 指定目标 + 配置
-      - name: Build firmware
+          esp_idf_version: v5.2
+      - name: Build for esp32c6
         run: |
-          bash -lc "
-          . /opt/esp/idf/export.sh
           idf.py set-target esp32c6
-          
-          # 如果你有 sdkconfig.defaults 建议启用
-          # idf.py defconfig
-          
           idf.py build
-          "
-
-      # ✅ 合并固件（明确输出）
-      - name: Merge firmware
-        run: |
-          bash -lc "
-          . /opt/esp/idf/export.sh
-          idf.py merge-bin -o build/firmware.bin
-          "
-
-      - name: Prepare package
-        run: |
-          mkdir -p release
-          cp build/firmware.bin release/
-          cp build/*.bin release/ || true
-          cp build/*.elf release/ || true
-
-          echo "Build Time: $(date)" > release/info.txt
-          echo "Commit: $(git rev-parse --short HEAD)" >> release/info.txt
-
-      - name: Zip firmware
-        run: |
-          cd release
-          zip -r ../xiaozhi-esp32c6.zip .
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: xiaozhi-esp32c6
-          path: xiaozhi-esp32c6.zip
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: xiaozhi-esp32c6
-
-      # ✅ 防止 tag 冲突
-      - name: Generate tag
-        id: tag
-        run: echo "tag=build-$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: ESP32C6 Auto Build
-          tag_name: ${{ steps.tag.outputs.tag }}
-          files: xiaozhi-esp32c6.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
